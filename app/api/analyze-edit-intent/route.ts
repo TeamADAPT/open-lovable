@@ -31,6 +31,12 @@ const googleGenerativeAI = createGoogleGenerativeAI({
   baseURL: isUsingAIGateway ? aiGatewayBaseURL : undefined,
 });
 
+// Hermes API integration
+const hermes = createOpenAI({
+  apiKey: process.env.HERMES_API_KEY || 'hermes-api-key',
+  baseURL: process.env.HERMES_BASE_URL || 'http://127.0.0.1:8002/v1',
+});
+
 // Schema for the AI's search plan - not file selection!
 const searchPlanSchema = z.object({
   editType: z.enum([
@@ -115,6 +121,8 @@ export async function POST(request: NextRequest) {
       }
     } else if (model.startsWith('google/')) {
       aiModel = googleGenerativeAI(model.replace('google/', ''));
+    } else if (model.startsWith('hermes/')) {
+      aiModel = hermes(process.env.HERMES_MODEL_NAME || 'hermes-4-70b-fp8');
     } else {
       // Default to groq if model format is unclear
       aiModel = groq(model);

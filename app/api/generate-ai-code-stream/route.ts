@@ -44,6 +44,12 @@ const openai = createOpenAI({
   baseURL: isUsingAIGateway ? aiGatewayBaseURL : process.env.OPENAI_BASE_URL,
 });
 
+// Hermes API integration
+const hermes = createOpenAI({
+  apiKey: process.env.HERMES_API_KEY || 'hermes-api-key',
+  baseURL: process.env.HERMES_BASE_URL || 'http://127.0.0.1:8002/v1',
+});
+
 // Helper function to analyze user preferences from conversation history
 function analyzeUserPreferences(messages: ConversationMessage[]): {
   commonPatterns: string[];
@@ -1188,10 +1194,12 @@ CRITICAL: When files are provided in the context:
         const isGoogle = model.startsWith('google/');
         const isOpenAI = model.startsWith('openai/');
         const isKimiGroq = model === 'moonshotai/kimi-k2-instruct-0905';
-        const modelProvider = isAnthropic ? anthropic : 
-                              (isOpenAI ? openai : 
-                              (isGoogle ? googleGenerativeAI : 
-                              (isKimiGroq ? groq : groq)));
+        const isHermes = model.startsWith('hermes/');
+        const modelProvider = isAnthropic ? anthropic :
+                              (isOpenAI ? openai :
+                              (isGoogle ? googleGenerativeAI :
+                              (isKimiGroq ? groq :
+                              (isHermes ? hermes : groq))));
         
         // Fix model name transformation for different providers
         let actualModel: string;
@@ -1203,13 +1211,16 @@ CRITICAL: When files are provided in the context:
           // Kimi on Groq - use full model string
           actualModel = 'moonshotai/kimi-k2-instruct-0905';
         } else if (isGoogle) {
-          // Google uses specific model names - convert our naming to theirs  
+          // Google uses specific model names - convert our naming to theirs
           actualModel = model.replace('google/', '');
+        } else if (isHermes) {
+          // Hermes API - strip prefix and use configured model
+          actualModel = process.env.HERMES_MODEL_NAME || 'hermes-4-70b-fp8';
         } else {
           actualModel = model;
         }
 
-        console.log(`[generate-ai-code-stream] Using provider: ${isAnthropic ? 'Anthropic' : isGoogle ? 'Google' : isOpenAI ? 'OpenAI' : 'Groq'}, model: ${actualModel}`);
+        console.log(`[generate-ai-code-stream] Using provider: ${isAnthropic ? 'Anthropic' : isGoogle ? 'Google' : isOpenAI ? 'OpenAI' : isHermes ? 'Hermes' : 'Groq'}, model: ${actualModel}`);
         console.log(`[generate-ai-code-stream] AI Gateway enabled: ${isUsingAIGateway}`);
         console.log(`[generate-ai-code-stream] Model string: ${model}`);
 
@@ -1285,6 +1296,11 @@ It's better to have 3 complete files than 10 incomplete files.`
         // Add temperature for non-reasoning models
         if (!model.startsWith('openai/gpt-5')) {
           streamOptions.temperature = 0.7;
+        }
+
+        // Optimize temperature for Hermes models
+        if (isHermes) {
+          streamOptions.temperature = 0.3; // Lower temperature for more deterministic code generation
         }
         
         // Add reasoning effort for GPT-5 models
